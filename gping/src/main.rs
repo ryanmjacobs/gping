@@ -154,7 +154,7 @@ impl App {
         // Find the Y axis bounds for our chart.
         // This is trickier than the x-axis. We iterate through all our PlotData structs
         // and find the min/max of all the values. Then we add a 10% buffer to them.
-        let (min, max) = match self
+        let (mut min, mut max) = match self
             .data
             .iter()
             .flat_map(|b| b.data.as_slice())
@@ -163,14 +163,26 @@ impl App {
             .minmax()
         {
             MinMaxResult::NoElements => (f64::INFINITY, 0_f64),
-            MinMaxResult::OneElement(elm) => (elm, elm),
-            MinMaxResult::MinMax(min, max) => (min, max),
+            // MinMaxResult::OneElement(elm) => (elm, elm),
+            // MinMaxResult::MinMax(min, max) => (min, max)
+            MinMaxResult::OneElement(elm) => (0_f64, elm),
+            MinMaxResult::MinMax(_min, max) => (0_f64, max)
         };
 
-        // Add a 10% buffer to the top and bottom
-        let max_10_percent = (max * 10_f64) / 100_f64;
-        let min_10_percent = (min * 10_f64) / 100_f64;
-        [min - min_10_percent, max + max_10_percent]
+        // - TODO: honestly these two settings should be flags...
+        // - Reject negative bounds
+        // - Show at least 1 ms of axis
+        //
+        // - TODO: should we assert "max > min" ?
+        // - TODO: would be nice to have whole number intervals
+        // - TODO: prevent outliers from jamming axis
+        min = min.clamp(0_f64,     f64::INFINITY);
+        max = max.clamp(1_000_f64, f64::INFINITY);
+
+        // Add a 20% buffer to the top and bottom
+        let pos_margin = (max * 20_f64) / 100_f64;
+        let neg_margin = (min * 20_f64) / 100_f64;
+        [min - neg_margin, max + pos_margin]
     }
 
     fn x_axis_bounds(&self) -> [f64; 2] {
