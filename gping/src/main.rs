@@ -169,8 +169,10 @@ impl App {
             MinMaxResult::MinMax(_min, max) => (0_f64, max)
         };
 
+        // - TODO: honestly these two settings should be flags...
         // - Reject negative bounds
         // - Show at least 1 ms of axis
+        //
         // - TODO: should we assert "max > min" ?
         // - TODO: would be nice to have whole number intervals
         // - TODO: prevent outliers from jamming axis
