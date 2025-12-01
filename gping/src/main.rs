@@ -101,6 +101,8 @@ struct Args {
         default_value = "0"
     )]
     horizontal_margin: u16,
+    #[arg(short = '0', long, help = "Set vertical axis minimum to 0 ms.")]
+    ymin: bool,
     #[arg(
         name = "color",
         short = 'c',
@@ -133,15 +135,17 @@ following color names: 'black', 'red', 'green', 'yellow', 'blue', 'magenta',
 struct App {
     data: Vec<PlotData>,
     display_interval: chrono::Duration,
-    started: chrono::DateTime<Local>,
+    started:chrono::DateTime<Local>,
+    ymin: bool
 }
 
 impl App {
-    fn new(data: Vec<PlotData>, buffer: u64) -> Self {
+    fn new(data: Vec<PlotData>, buffer: u64, ymin: bool) -> Self {
         App {
             data,
             display_interval: chrono::Duration::from_std(Duration::from_secs(buffer)).unwrap(),
             started: Local::now(),
+            ymin: ymin
         }
     }
 
@@ -153,7 +157,7 @@ impl App {
     fn y_axis_bounds(&self) -> [f64; 2] {
         // Find the Y axis bounds for our chart.
         // This is trickier than the x-axis. We iterate through all our PlotData structs
-        // and find the min/max of all the values. Then we add a 10% buffer to them.
+        // and find the min/max of all the values. Then we add a 20% buffer to them.
         let (mut min, mut max) = match self
             .data
             .iter()
@@ -163,21 +167,22 @@ impl App {
             .minmax()
         {
             MinMaxResult::NoElements => (f64::INFINITY, 0_f64),
-            // MinMaxResult::OneElement(elm) => (elm, elm),
-            // MinMaxResult::MinMax(min, max) => (min, max)
-            MinMaxResult::OneElement(elm) => (0_f64, elm),
-            MinMaxResult::MinMax(_min, max) => (0_f64, max)
+            MinMaxResult::OneElement(elm)  => (if self.ymin {0.0} else {elm}, elm),
+            MinMaxResult::MinMax(min, max) => (if self.ymin {0.0} else {min}, max)
         };
 
-        // - TODO: honestly these two settings should be flags...
-        // - Reject negative bounds
-        // - Show at least 1 ms of axis
-        //
-        // - TODO: should we assert "max > min" ?
         // - TODO: would be nice to have whole number intervals
         // - TODO: prevent outliers from jamming axis
-        min = min.clamp(0_f64,     f64::INFINITY);
-        max = max.clamp(1_000_f64, f64::INFINITY);
+        if self.ymin {
+            // Reject negative bounds
+            min = min.clamp(0.0,    f64::INFINITY);
+
+            // Show at least 1 ms of axis
+            max = max.clamp(1000.0, f64::INFINITY);
+
+            // Assert "max > min"
+            // if min > max {panic!("ymin > ymax")}
+        }
 
         // Add a 20% buffer to the top and bottom
         let pos_margin = (max * 20_f64) / 100_f64;
@@ -432,7 +437,7 @@ fn main() -> Result<()> {
         key_tx.clone(),
     ));
 
-    let mut app = App::new(data, args.buffer);
+    let mut app = App::new(data, args.buffer, args.ymin);
     enable_raw_mode()?;
     let stdout = io::stdout();
     let mut backend = CrosstermBackend::new(BufWriter::with_capacity(1024 * 1024 * 4, stdout));
